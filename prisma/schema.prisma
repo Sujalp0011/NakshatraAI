@@ -1,0 +1,169 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  name         String
+  language     String    @default("en")
+  plan         String    @default("free")
+
+  // Birth details for Kundli
+  dateOfBirth  DateTime?
+  timeOfBirth  String?       // "HH:mm" format
+  placeOfBirth String?
+  latitude     Float?
+  longitude    Float?
+  timeZone     String?
+  birthTimeKnown Boolean @default(true)
+  securityVersion Int    @default(1)
+  planExpiresAt   DateTime?
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  // Relations
+  kundlis         Kundli[]
+  chatMessages    ChatMessage[]
+  predictions     Prediction[]
+  compatibilities Compatibility[]
+  dailyUsages      DailyUsage[]
+  sessions         Session[]
+  paymentOrders    PaymentOrder[]
+}
+
+model PaymentOrder {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider          String   @default("razorpay")
+  providerOrderId   String   @unique
+  providerPaymentId String?
+  plan              String
+  amount            Int
+  currency          String   @default("INR")
+  status            String   @default("created")
+  paidAt            DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([userId, createdAt])
+}
+
+model WebhookEvent {
+  id          String   @id @default(cuid())
+  provider    String
+  eventId     String
+  type        String
+  processedAt DateTime @default(now())
+
+  @@unique([provider, eventId])
+}
+
+model Session {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  securityVersion Int
+  userAgent       String?
+  ipAddress       String?
+  expiresAt       DateTime
+  revokedAt       DateTime?
+  createdAt       DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model RateLimit {
+  id        String   @id @default(cuid())
+  key       String
+  action    String
+  period    String
+  count     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([key, action, period])
+  @@index([period])
+}
+
+model DailyUsage {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind      String
+  period    String
+  count     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, kind, period])
+  @@index([userId, period])
+}
+
+model Kundli {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chartType String   @default("vedic")   // "vedic" | "western"
+  chartData String   // JSON stringified planetary positions, houses, aspects
+  birthData String   // JSON stringified snapshot of birth details used for this chart
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Prediction {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String   // "daily" | "weekly" | "monthly"
+  content   String   // JSON stringified { summary, health, career, love, finance, luckyColor, luckyNumber, luckyDirection, overallRating }
+  date      DateTime // The date this prediction is FOR (not when created)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, type, date])
+  @@index([userId])
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      String   // "user" | "assistant"
+  content   String
+  status    String   @default("complete")
+  requestId String?
+  errorCode String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([userId, createdAt])
+  @@unique([userId, requestId, role])
+}
+
+model Compatibility {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  partnerName  String
+  partnerDob   DateTime
+  partnerTob   String?
+  partnerPlace String?
+  partnerLatitude Float?
+  partnerLongitude Float?
+  partnerTimeZone String?
+  score        Float
+  analysis     String   // JSON stringified { overallScore, categories: [{ name, score, maxScore, description }] }
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+}
